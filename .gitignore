@@ -1,0 +1,43 @@
+# ── Secrets & credentials ─────────────────────────────────────────────────
+.env
+*.env
+.env.*
+secrets.json
+credentials.json
+
+# ── User memory (contains personal data) ─────────────────────────────────
+user_memory.json
+
+# ── ChromaDB vector store (large binary, regenerated via ingest.py) ───────
+chroma_db/
+
+# ── Python cache ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# ── Virtual environments ───────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── OS files ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE / editor ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Streamlit cache ───────────────────────────────────────────────────────
+.streamlit/
+
+# ── Pytest / test output ──────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
