@@ -252,26 +252,56 @@ def delete_user_memory() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Pre-compiled patterns used by extract_memory_from_message.
-# "i am" pattern uses a negative lookahead to avoid capturing non-name words
-# (e.g. "I am interested in CSE" should NOT capture "interested" as a name)
+# "i am" / "i'm" patterns use a negative lookahead to avoid capturing
+# non-name words (e.g. "I am interested in CSE" → don't capture "interested")
 _NAME_STOPWORDS = (
     "interested|looking|studying|a|an|the|from|in|at|going|planning|"
     "here|ready|good|bad|new|happy|sad|ok|okay|fine|well|sorry|not|"
     "asking|trying|checking|wondering|hoping|considering|applying"
 )
 _NAME_PATTERNS: list[re.Pattern] = [
+    # "my name is Bhavya"
     re.compile(r"my name is\s+([A-Za-z][a-zA-Z'-]{1,})", re.IGNORECASE),
+    # "I am Bhavya" — with stopword guard
     re.compile(
-        r"i am\s+(?!(?:" + _NAME_STOPWORDS + r")\b)([A-Z][a-z]{1,})",
+        r"i am\s+(?!(?:" + _NAME_STOPWORDS + r")\b)([A-Za-z][a-zA-Z'-]{1,})",
         re.IGNORECASE,
     ),
+    # "I'm Bhavya" — contraction form, with same stopword guard
+    re.compile(
+        r"i'?m\s+(?!(?:" + _NAME_STOPWORDS + r")\b)([A-Za-z][a-zA-Z'-]{1,})",
+        re.IGNORECASE,
+    ),
+    # "call me Bhavya"
     re.compile(r"call me\s+([A-Za-z][a-zA-Z'-]{1,})", re.IGNORECASE),
+    # "this is Bhavya" / "it's Bhavya"
+    re.compile(r"(?:this is|it'?s)\s+([A-Z][a-z]{1,})", re.IGNORECASE),
 ]
 
-_BRANCH_PATTERN: re.Pattern = re.compile(
-    r"interested in\s+(CSE|ECE|EEE|MECH|CIVIL|IT|AIDS|AIML)\b",
-    re.IGNORECASE,
-)
+# Branch detection — matches all natural ways a user might state their department.
+# Covers: "interested in CSE", "I belong to CSE", "I am in CSE", "my branch is CSE",
+#         "I study ECE", "CSE department", "I am a CSE student", "from ECE", etc.
+_BRANCH_NAMES = r"(CSE|ECE|EEE|MECH|CIVIL|IT|AIDS|AIML)"
+_BRANCH_PATTERNS: list[re.Pattern] = [
+    # "interested in CSE"
+    re.compile(r"interest(?:ed)?\s+in\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "I belong to CSE" / "belong CSE"
+    re.compile(r"belong(?:\s+to)?\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "I am in CSE" / "I'm in ECE"
+    re.compile(r"i(?:'m|\s+am)\s+in\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "I am from CSE" / "I'm from ECE"
+    re.compile(r"i(?:'m|\s+am)\s+from\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "I am a CSE student" / "I'm an ECE student"
+    re.compile(r"i(?:'m|\s+am)\s+(?:a\s+|an\s+)?" + _BRANCH_NAMES + r"\s+student", re.IGNORECASE),
+    # "I study CSE" / "I am studying ECE"
+    re.compile(r"stud(?:y|ying)\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "my branch is CSE" / "my department is ECE"
+    re.compile(r"my\s+(?:branch|department|dept|course|stream)\s+is\s+" + _BRANCH_NAMES, re.IGNORECASE),
+    # "CSE department" / "CSE branch" / "CSE student"
+    re.compile(_BRANCH_NAMES + r"\s+(?:department|dept|branch|student|course)", re.IGNORECASE),
+    # "from CSE" / "in CSE" as short standalone forms
+    re.compile(r"\b(?:from|in)\s+" + _BRANCH_NAMES + r"\b", re.IGNORECASE),
+]
 
 _LANGUAGE_PATTERNS: list[re.Pattern] = [
     re.compile(r"answer in\s+(Telugu|Hindi|English)\b", re.IGNORECASE),
@@ -336,12 +366,14 @@ def extract_memory_from_message(
             break  # first pattern that matches wins
 
     # ── Branch interest ───────────────────────────────────────────────────
-    match = _BRANCH_PATTERN.search(content)
-    if match:
-        branch = match.group(1).upper()
-        if branch != memory.branch_interest:
-            logger.debug("Detected branch interest: %r", branch)
-            memory.branch_interest = branch
+    for pattern in _BRANCH_PATTERNS:
+        match = pattern.search(content)
+        if match:
+            branch = match.group(1).upper()
+            if branch != memory.branch_interest:
+                logger.debug("Detected branch interest: %r", branch)
+                memory.branch_interest = branch
+            break  # first matching pattern wins
 
     # ── Language preference ───────────────────────────────────────────────
     for pattern in _LANGUAGE_PATTERNS:
